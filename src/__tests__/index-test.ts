@@ -44,6 +44,7 @@ describe('analyze', () => {
         const query = `
         { 
             animals {
+                name
                 ... on Dog {
                     name
                 }
@@ -55,7 +56,26 @@ describe('analyze', () => {
         const document = parse(query);
         const rootVertex = analyzeQuery(document, schema);
         const [allVertices, allEdges] = printDependencyGraph(rootVertex);
-        expect(allEdges).to.be.lengthOf(3);
+        expect(allEdges).to.be.lengthOf(3)
+        const edgesString = allEdges.map(edge => edge.from.toString() + ' -> ' + edge.to.toString());
+        console.log(edgesString);
+        expect(edgesString).to.contain('Query.animals: [Animal] -> ROOT');
+        expect(edgesString).to.contain('Dog.name: String -> Query.animals: [Animal]');
+        expect(edgesString).to.contain('Cat.name: String -> Query.animals: [Animal]');
+
+    });
+
+    it('field on interface', () => {
+        const query = `
+        { 
+            animals {
+                name
+            }
+        }`;
+        const document = parse(query);
+        const rootVertex = analyzeQuery(document, schema);
+        const [allVertices, allEdges] = printDependencyGraph(rootVertex);
+        expect(allEdges).to.be.lengthOf(3)
         const edgesString = allEdges.map(edge => edge.from.toString() + ' -> ' + edge.to.toString());
         console.log(edgesString);
         expect(edgesString).to.contain('Query.animals: [Animal] -> ROOT');
