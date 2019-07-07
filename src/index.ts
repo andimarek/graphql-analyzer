@@ -28,7 +28,6 @@ import { getArgumentValues, getVariableValues } from 'graphql/execution/values';
 import * as util from 'util';
 import { restElement } from '@babel/types';
 import { buildExecutionContext } from 'graphql/execution/execute';
-import Maybe from 'graphql/tsutils/Maybe';
 
 interface ExecutionContext {
     schema: GraphQLSchema;
@@ -93,7 +92,7 @@ export function traverseFieldVertices(
 export function analyzeQuery(
     document: DocumentNode,
     schema: GraphQLSchema,
-    rawVariableValues?: Maybe<{ [key: string]: any }>,
+    rawVariableValues?: { [key: string]: any },
 ): FieldVertex {
     const operationDefinition = getOperationDefinition(document);
     const variableDefinitions = (operationDefinition.variableDefinitions as Array<VariableDefinitionNode>)
