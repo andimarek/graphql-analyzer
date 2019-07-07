@@ -2,20 +2,24 @@
   "name": "graphql-analyzer",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "prepublish": "tsc",
   "scripts": {
     "build": "tsc",
     "test": "npm run build && jest"
   },
+  "peerDependencies": {
+    "graphql": "^14.3.1"
+  },
   "author": "Andreas Marek",
   "license": "MIT",
-  "dependencies": {
+  "devDependencies": {
     "@types/chai": "^4.1.7",
-    "@types/graphql": "^14.2.0",
     "@types/jest": "^24.0.15",
     "@types/node": "^12.0.4",
+    "@types/graphql": "^14.2.0",
     "chai": "^4.2.0",
-    "graphql": "^14.3.1",
     "jest": "^24.8.0",
     "ts-jest": "^24.0.2",
     "typescript": "^3.5.2"
