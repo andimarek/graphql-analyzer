@@ -2,35 +2,8 @@ import { expect } from 'chai';
 import { parse, OperationDefinitionNode, buildSchema } from 'graphql';
 import { ExecutionContext } from 'graphql/execution/execute';
 
-import { collectFieldsFromOperation, analyzeQuery } from '../index';
+import { analyzeQuery, traverseFieldVertices, printDependencyGraph } from '../index';
 import * as util from 'util';
-
-describe('collectFields', () => {
-    const schema = buildSchema(`
-    type Query {
-        hello: String
-    }`)
-    const query = '{ hello hello2: hello ...on Query { hello } }';
-    const ast = parse(query);
-
-    const operationDefinition: OperationDefinitionNode = ast.definitions[0] as OperationDefinitionNode;
-    const selectionSet = operationDefinition.selectionSet;
-    const executionContext: ExecutionContext = {
-        schema,
-        fragments: {},
-        rootValue: null,
-        contextValue: null,
-        operation: operationDefinition,
-        variableValues: {},
-        fieldResolver: null!,
-        errors: []
-    };
-
-    it('collectFieldsFromRoot', () => {
-        const mergedFields = collectFieldsFromOperation(executionContext, operationDefinition, schema.getQueryType()!);
-        expect(mergedFields.length).equal(2);
-    });
-});
 
 describe('analyze', () => {
     const schema = buildSchema(`
@@ -50,21 +23,18 @@ describe('analyze', () => {
     { 
         dog {
             name
-            name
-            ... on Dog {
-                name
-            }
-            id
-        }
-        cat {
-            name
         }
     }`;
     const document = parse(query);
 
-
     it('test', () => {
-        analyzeQuery(document, schema);
+        const rootVertex = analyzeQuery(document, schema);
+        const [allVertices, allEdges] = printDependencyGraph(rootVertex);
+        expect(allEdges.length == 3);
+        const edgesString = allEdges.map(edge => edge.from.toString() + ' -> ' + edge.to.toString());
+        expect(edgesString).to.contain('Query.dog: Dog -> ROOT');
+        expect(edgesString).to.contain( 'Dog.name: String -> Query.dog: Dog');
+        console.log(edgesString);
     });
 
 })

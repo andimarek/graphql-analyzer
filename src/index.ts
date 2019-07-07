@@ -37,17 +37,57 @@ interface ExecutionContext {
 }
 
 export interface FieldVertex {
+    id: string,
     fields: Array<FieldNode>;
     objectType: GraphQLObjectType;
+    fieldDefinition: GraphQLField<any, any>;
     dependsOn: Array<FieldVertex>;
     dependOnMe: Array<FieldVertex>;
 }
+
 
 
 interface MergedFieldWithType {
     fields: Array<FieldNode>;
     objectType: GraphQLObjectType;
     fieldDefinition: GraphQLField<any, any>;
+}
+
+export interface DependencyEdge {
+    from: FieldVertex,
+    to: FieldVertex
+}
+
+export function printDependencyGraph(root: FieldVertex):
+    [Array<FieldVertex>, Array<DependencyEdge>] {
+
+    const allVertices: Array<FieldVertex> = [];
+    const edges: Array<DependencyEdge> = [];
+    traverseFieldVertices(root, vertex => {
+        allVertices.push(vertex);
+        for (const dependOnMe of vertex.dependOnMe) {
+            edges.push({ from: dependOnMe, to: vertex });
+        }
+    });
+    return [allVertices, edges];
+
+}
+
+export function traverseFieldVertices(
+    root: FieldVertex,
+    visitor: (vertex: FieldVertex) => void): void {
+    const traverserState: Array<FieldVertex> = [];
+    traverserState.push(root);
+
+    while (traverserState.length > 0) {
+        const curVertex = traverserState.pop()!;
+        visitor(curVertex);
+        const children = curVertex.dependOnMe;
+
+        children.forEach(child => {
+            traverserState.push(child);
+        });
+    }
 }
 
 export function analyzeQuery(
@@ -83,33 +123,40 @@ export function analyzeQuery(
         )
     };
 
-    const dummyRootFieldVertex: FieldVertex = {
+    const dummyRootFieldVertex: FieldVertex & Object = {
+        id: "0",
         objectType: null!,
         fields: null!,
         dependOnMe: [],
-        dependsOn: []
+        dependsOn: [],
+        fieldDefinition: null!,
+        toString() {
+            return "ROOT";
+        }
     };
     const allVertices: Array<FieldVertex> = [];
+    let vertexId = 1;
     const visitor = (context: VisitorContext) => {
         const mergedField = context.mergedField;
-        console.log('visit: ' + mergedFieldToString(context.mergedField));
 
-        const newFieldVertex: FieldVertex = {
+        const newFieldVertex: FieldVertex & Object = {
+            id: (vertexId++).toString(),
             fields: mergedField.fields,
             objectType: mergedField.objectType,
+            fieldDefinition: mergedField.fieldDefinition,
             dependsOn: [context.parentContext!.fieldVertex!],
             dependOnMe: [],
+            toString() {
+                return this.objectType.name + "." + this.fields[0].name.value + ": " + 
+                    this.fieldDefinition.type;
+            }
         };
-        console.log('parent context mergedField:  ' + mergedFieldToString(context.parentContext.mergedField));
         context.parentContext.fieldVertex!.dependOnMe.push(newFieldVertex);
         context.fieldVertex = newFieldVertex;
         allVertices.push(newFieldVertex);
     };
     depthFirstVisit(roots, dummyRootFieldVertex, getChildren, visitor);
 
-    for (const vertex of allVertices) {
-        console.log('vertex:  ' + vertexToString(vertex));
-    }
     return dummyRootFieldVertex;
 }
 
@@ -167,7 +214,7 @@ function depthFirstVisit(
 }
 
 
-export function collectFieldsFromOperation(
+function collectFieldsFromOperation(
     exeContext: ExecutionContext,
     operationDefinition: OperationDefinitionNode,
     rootType: GraphQLObjectType
