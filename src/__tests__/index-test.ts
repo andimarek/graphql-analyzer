@@ -36,14 +36,27 @@ describe('analyze', () => {
     const schema = buildSchema(`
     type Query {
         dog: Dog  
+        cat: Cat
     }
     type Dog {
+        name: String
+        id: ID
+    }
+    type Cat {
         name: String
     }
     `)
     const query = `
     { 
         dog {
+            name
+            name
+            ... on Dog {
+                name
+            }
+            id
+        }
+        cat {
             name
         }
     }`;
