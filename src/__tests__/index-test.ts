@@ -25,7 +25,6 @@ describe('collectFields', () => {
         fieldResolver: null!,
         errors: []
     };
-    // console.log('result:', util.inspect(mergedFields, false, null, true));
     it('collectFieldsFromRoot', () => {
         const mergedFields = collectFieldsFromRoot(executionContext, operationDefinition, schema.getQueryType()!);
         expect(mergedFields.length).equal(2);

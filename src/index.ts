@@ -1,28 +1,18 @@
 import {
-    graphql,
     GraphQLSchema,
     GraphQLObjectType,
     GraphQLString,
-    parse,
-    visit,
-    ASTNode,
     SelectionSetNode,
     FieldNode,
     FragmentSpreadNode,
     InlineFragmentNode,
     GraphQLDirective,
     DirectiveNode,
-    GraphQLError,
-    GraphQLField,
-    GraphQLNonNull,
     GraphQLIncludeDirective,
     GraphQLSkipDirective,
-    valueFromAST,
     GraphQLType,
     OperationDefinitionNode,
     GraphQLOutputType,
-    createSourceEventStream,
-    GraphQLNamedType,
     GraphQLCompositeType,
     GraphQLInterfaceType,
     GraphQLUnionType
@@ -246,22 +236,6 @@ function getDirectiveValues(
         return getArgumentValues(directiveDef, directiveNode, variableValues);
     }
 }
-type StringRecord<T = any> = Record<string, T>;
-
-function keyMap<T>(
-    list: ReadonlyArray<T>,
-    keyFn: (item: T) => string,
-): StringRecord<T> {
-    return list.reduce((map, item) => {
-        map[keyFn(item)] = item;
-        return map;
-    }, Object.create(null));
-}
-
-
-function hasOwnProperty(obj: any, prop: string): boolean {
-    return Object.prototype.hasOwnProperty.call(obj, prop);
-}
 
 function invariant(condition: any, message: string) {
     const booleanCondition = Boolean(condition);
@@ -269,19 +243,6 @@ function invariant(condition: any, message: string) {
         throw new Error(message);
     }
 }
-
-function inspect(value: any): string {
-    return String(value);
-}
-
-function print(value: any): string {
-    return String(value);
-}
-
-function isNonNullType(type: any): boolean {
-    return type instanceof GraphQLNonNull;
-}
-
 function nonNull<T>(object: T): T {
     if (!object) {
         throw new Error('expected non null/undefined');
