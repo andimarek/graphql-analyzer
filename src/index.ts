@@ -38,7 +38,7 @@ interface MergedFieldWithType {
 }
 
 
-function collectFieldsFromRoot(
+export function collectFieldsFromRoot(
     exeContext: ExecutionContext,
     operationDefinition: OperationDefinitionNode,
     rootType: GraphQLObjectType
@@ -128,7 +128,7 @@ function collectInlineFragment(
     let newPossibleObjectTypes = possibleObjectTypes;
     let newParentType = parentType;
     if (inlineFragment.typeCondition) {
-        newParentType = exeContext.schema.getType(inlineFragment.typeCondition.name.value) as GraphQLObjectType;
+        newParentType = nonNull(exeContext.schema.getType(inlineFragment.typeCondition.name.value)) as GraphQLObjectType;
         newPossibleObjectTypes = narrowDownPossibleObjects(exeContext, possibleObjectTypes, newParentType);;
     }
     collectFieldsImpl(
@@ -195,7 +195,7 @@ function getPossibleTypes(
     } else if (type instanceof GraphQLInterfaceType || type instanceof GraphQLUnionType) {
         return new Set(exeContext.schema.getPossibleTypes(type));
     } else {
-        throw new Error("should not happen");
+        throw new Error(`should not happen: type is ${type}`);
     }
 }
 
@@ -282,6 +282,13 @@ function isNonNullType(type: any): boolean {
     return type instanceof GraphQLNonNull;
 }
 
+function nonNull<T>(object: T): T {
+    if (!object) {
+        throw new Error('expected non null/undefined');
+    }
+    return object;
+}
+
 
 interface FieldVertex {
     field: FieldNode;
@@ -305,23 +312,7 @@ var schema = new GraphQLSchema({
         }
     })
 });
-var query = '{ hello hello2: hello ...on RootQueryType { hello } }';
-const ast = parse(query);
 
-const operationDefinition: OperationDefinitionNode = ast.definitions[0] as OperationDefinitionNode;
-const selectionSet = operationDefinition.selectionSet;
-const executionContext: ExecutionContext = {
-    schema,
-    fragments: {},
-    rootValue: null,
-    contextValue: null,
-    operation: operationDefinition,
-    variableValues: {},
-    fieldResolver: null!,
-    errors: []
-};
-const mergedFields = collectFieldsFromRoot(executionContext, operationDefinition, schema.getQueryType()!);
-console.log('result:', util.inspect(mergedFields, false, null, true));
 
 // graphql(schema, query).then(result => {
 
