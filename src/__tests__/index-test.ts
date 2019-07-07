@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { parse, OperationDefinitionNode, buildSchema } from 'graphql';
 import { ExecutionContext } from 'graphql/execution/execute';
 
-import { collectFieldsFromRoot } from '../index';
+import { collectFieldsFromOperation, analyzeQuery } from '../index';
 import * as util from 'util';
 
 describe('collectFields', () => {
@@ -25,8 +25,34 @@ describe('collectFields', () => {
         fieldResolver: null!,
         errors: []
     };
+
     it('collectFieldsFromRoot', () => {
-        const mergedFields = collectFieldsFromRoot(executionContext, operationDefinition, schema.getQueryType()!);
+        const mergedFields = collectFieldsFromOperation(executionContext, operationDefinition, schema.getQueryType()!);
         expect(mergedFields.length).equal(2);
     });
 });
+
+describe('analyze', () => {
+    const schema = buildSchema(`
+    type Query {
+        dog: Dog  
+    }
+    type Dog {
+        name: String
+    }
+    `)
+    const query = `
+    { 
+        dog {
+            name
+        }
+    }`;
+    const document = parse(query);
+
+
+    it('test', () => {
+        analyzeQuery(document, schema);
+    });
+
+})
+

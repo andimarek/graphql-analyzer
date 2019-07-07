@@ -15,20 +15,158 @@ import {
     GraphQLOutputType,
     GraphQLCompositeType,
     GraphQLInterfaceType,
-    GraphQLUnionType
+    GraphQLUnionType,
+    parse,
+    GraphQLField,
+    getNamedType,
+    isCompositeType,
+    FragmentDefinitionNode,
+    DocumentNode,
+    VariableDefinitionNode
 } from 'graphql';
-import { ExecutionContext } from 'graphql/execution/execute';
-import { getArgumentValues } from 'graphql/execution/values';
+import { getArgumentValues, getVariableValues } from 'graphql/execution/values';
 import * as util from 'util';
+import { restElement } from '@babel/types';
+import { buildExecutionContext } from 'graphql/execution/execute';
+import Maybe from 'graphql/tsutils/Maybe';
 
-interface MergedFieldWithType {
-    fields: Array<FieldNode>,
-    objectType: GraphQLObjectType,
-    // fieldDefinition: GraphQLField,
+interface ExecutionContext {
+    schema: GraphQLSchema;
+    fragments: { [key: string]: FragmentDefinitionNode };
+    variableValues: { [key: string]: any };
+}
+
+export interface FieldVertex {
+    fields: Array<FieldNode>;
+    objectType: GraphQLObjectType;
+    dependsOn: Array<FieldVertex>;
+    dependOnMe: Array<FieldVertex>;
 }
 
 
-export function collectFieldsFromRoot(
+interface MergedFieldWithType {
+    fields: Array<FieldNode>;
+    objectType: GraphQLObjectType;
+    fieldDefinition: GraphQLField<any, any>;
+}
+
+export function analyzeQuery(
+    document: DocumentNode,
+    schema: GraphQLSchema,
+    rawVariableValues?: Maybe<{ [key: string]: any }>,
+) {
+    const operationDefinition = getOperationDefinition(document);
+    const variableDefinitions = (operationDefinition.variableDefinitions as Array<VariableDefinitionNode>)
+        || [];
+    const coercedVariableValues = getVariableValues(
+        schema,
+        variableDefinitions,
+        rawVariableValues || {},
+    );
+
+    const fragments = getFragments(document);
+    const context: ExecutionContext = {
+        fragments,
+        schema,
+        variableValues: coercedVariableValues
+    };
+    const roots = collectFieldsFromOperation(
+        context,
+        operationDefinition,
+        schema.getQueryType()!
+    )
+
+    const getChildren: (mergedField: MergedFieldWithType) => Array<MergedFieldWithType> = mergedField => {
+        return collectFields(
+            context,
+            mergedField
+        )
+    };
+
+    const dummyRootFieldVertex: FieldVertex = {
+        objectType: null!,
+        fields: null!,
+        dependOnMe: [],
+        dependsOn: []
+    };
+    const allVertices: Array<FieldVertex> = [];
+    const visitor = (context: VisitorContext) => {
+        const mergedField = context.mergedField;
+        console.log('visit: ' + mergedFieldToString(context.mergedField));
+
+        const newFieldVertex: FieldVertex = {
+            fields: mergedField.fields,
+            objectType: mergedField.objectType,
+            dependsOn: [context.parentContext!.fieldVertex!],
+            dependOnMe: [],
+        };
+        console.log('parent context mergedField:  ' + mergedFieldToString(context.parentContext.mergedField));
+        context.parentContext.fieldVertex!.dependOnMe.push(newFieldVertex);
+        context.fieldVertex = newFieldVertex;
+        allVertices.push(newFieldVertex);
+    };
+    depthFirstVisit(roots, dummyRootFieldVertex, getChildren, visitor);
+
+    for (const vertex of allVertices) {
+        console.log('vertex:  ' + vertexToString(vertex));
+    }
+}
+
+interface VisitorContext {
+    mergedField: MergedFieldWithType;
+    fieldVertex?: FieldVertex;
+    parentContext: VisitorContext;
+}
+
+
+function mergedFieldToString(mergedField: MergedFieldWithType): string {
+    if (!mergedField) {
+        return "merged field null";
+    }
+    return mergedField.objectType.name + "." + getFieldEntryKey(mergedField.fields[0]);
+}
+
+function vertexToString(fieldVertex: FieldVertex): string {
+    if (!fieldVertex.objectType) {
+        return "ROOT VERTEX";
+    }
+    return fieldVertex.objectType.name + "." + getFieldEntryKey(fieldVertex.fields[0]) +
+        " -> " + fieldVertex.dependsOn.map(dependency => vertexToString(dependency));
+}
+
+
+function depthFirstVisit(
+    roots: Array<MergedFieldWithType>,
+    rootFieldVertex: FieldVertex,
+    getChildren: (mergedField: MergedFieldWithType) => Array<MergedFieldWithType>,
+    visitor: (context: VisitorContext) => void) {
+    const traverserState: Array<VisitorContext> = [];
+    const dummyRootContext: VisitorContext = {
+        mergedField: null!,
+        fieldVertex: rootFieldVertex,
+        parentContext: null!
+    };
+    roots.forEach(mergedField => {
+        traverserState.push({ mergedField, fieldVertex: rootFieldVertex, parentContext: dummyRootContext });
+    });
+
+    while (traverserState.length > 0) {
+        const curContext = traverserState.pop()!;
+        visitor(curContext);
+        const children = getChildren(curContext.mergedField);
+
+        children.forEach(child => {
+            const newContext = {
+                parentContext: curContext,
+                mergedField: child,
+            };
+            traverserState.push(newContext);
+        });
+    }
+}
+
+
+export function collectFieldsFromOperation(
     exeContext: ExecutionContext,
     operationDefinition: OperationDefinitionNode,
     rootType: GraphQLObjectType
@@ -36,14 +174,44 @@ export function collectFieldsFromRoot(
 
     const result: { [key: string]: { [type: string]: MergedFieldWithType } } = {};
     collectFieldsImpl(exeContext, operationDefinition.selectionSet, result, new Set([rootType]), {}, rootType);
+    return toListOfMergedFields(result);
+}
 
+function collectFields(
+    exeContext: ExecutionContext,
+    mergedField: MergedFieldWithType
+): Array<MergedFieldWithType> {
+
+    const result: { [key: string]: { [type: string]: MergedFieldWithType } } = {};
+    const parentType = getNamedType(mergedField.fieldDefinition.type);
+    if (!(isCompositeType(parentType))) {
+        return [];
+    }
+    const possibleTypes = getPossibleTypes(exeContext, parentType);
+    for (const field of mergedField.fields) {
+        collectFieldsImpl(exeContext,
+            field.selectionSet!,
+            result,
+            possibleTypes,
+            {},
+            parentType);
+
+    }
+    return toListOfMergedFields(result);
+}
+
+function toListOfMergedFields(map: { [key: string]: { [type: string]: MergedFieldWithType } }): Array<MergedFieldWithType> {
     const mergedFields: Array<MergedFieldWithType> = [];
-    const listOfMaps = Object.values(result);
+    const listOfMaps = Object.values(map);
     listOfMaps.forEach(mapByTypeName => Object.values(mapByTypeName).forEach(mergedField => {
         mergedFields.push(mergedField);
     }));
     return mergedFields;
 }
+
+
+
+
 
 function collectFieldsImpl(
     exeContext: ExecutionContext,
@@ -92,9 +260,13 @@ function collectField(
     const mergedFields = result[name];
     for (const possibleObject of possibleObjectTypes) {
         if (!mergedFields[possibleObject.name]) {
+
+            const unwrappedParentType = getNamedType(parentType) as (GraphQLObjectType | GraphQLInterfaceType);
+            const fieldDefinition = unwrappedParentType.getFields()[field.name.value];
             const newMergedField: MergedFieldWithType = {
                 fields: [field],
-                objectType: possibleObject
+                objectType: possibleObject,
+                fieldDefinition
             };
             mergedFields[possibleObject.name] = newMergedField;
         } else {
@@ -189,6 +361,40 @@ function getPossibleTypes(
     }
 }
 
+function getFragments(document: DocumentNode): { [k: string]: FragmentDefinitionNode } {
+
+    const fragments: { [k: string]: FragmentDefinitionNode } = {};
+    for (let i = 0; i < document.definitions.length; i++) {
+        const definition = document.definitions[i];
+        switch (definition.kind) {
+            case "FragmentDefinition":
+                fragments[definition.name.value] = definition;
+                break;
+        }
+    }
+    return fragments;
+}
+function getOperationDefinition(document: DocumentNode): OperationDefinitionNode {
+
+    let result: OperationDefinitionNode | null = null;
+    for (let i = 0; i < document.definitions.length; i++) {
+        const definition = document.definitions[i];
+        switch (definition.kind) {
+            case "OperationDefinition":
+                if (result != null) {
+                    throw new Error("more than one operation found");
+                }
+                result = definition;
+                break;
+        }
+    }
+    if (result) {
+        return result;
+    } else {
+        throw new Error("no operation found");
+    }
+
+}
 
 
 function getFieldEntryKey(node: FieldNode): string {
@@ -250,37 +456,3 @@ function nonNull<T>(object: T): T {
     return object;
 }
 
-
-interface FieldVertex {
-    field: FieldNode;
-    objectType: Array<GraphQLType>;
-}
-
-// ----------------------------------------
-// ----------------------------------------
-// ----------------------------------------
-
-var schema = new GraphQLSchema({
-    query: new GraphQLObjectType({
-        name: 'RootQueryType',
-        fields: {
-            hello: {
-                type: GraphQLString,
-                resolve() {
-                    return 'world';
-                }
-            }
-        }
-    })
-});
-
-
-// graphql(schema, query).then(result => {
-
-//     // Prints
-//     // {
-//     //   data: { hello: "world" }
-//     // }
-//     console.log(result);
-
-// });
