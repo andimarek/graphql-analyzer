@@ -54,7 +54,7 @@ export function analyzeQuery(
     document: DocumentNode,
     schema: GraphQLSchema,
     rawVariableValues?: Maybe<{ [key: string]: any }>,
-) {
+): FieldVertex {
     const operationDefinition = getOperationDefinition(document);
     const variableDefinitions = (operationDefinition.variableDefinitions as Array<VariableDefinitionNode>)
         || [];
@@ -110,6 +110,7 @@ export function analyzeQuery(
     for (const vertex of allVertices) {
         console.log('vertex:  ' + vertexToString(vertex));
     }
+    return dummyRootFieldVertex;
 }
 
 interface VisitorContext {

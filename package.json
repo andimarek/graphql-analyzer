@@ -1,5 +1,5 @@
 {
-  "name": "graphql-execution-graph",
+  "name": "graphql-analyzer",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -7,8 +7,8 @@
     "build": "tsc",
     "test": "npm run build && jest"
   },
-  "author": "",
-  "license": "ISC",
+  "author": "Andreas Marek",
+  "license": "MIT",
   "dependencies": {
     "@types/chai": "^4.1.7",
     "@types/graphql": "^14.2.0",
