@@ -135,6 +135,40 @@ describe('analyze', () => {
         expect(edgesString).to.contain('Query.pets: [CatOrDog] -> ROOT');
 
     });
+    it('edge conditional info is correct', () => {
+        const query = `
+        { 
+            animals {
+                name
+            }
+            pets {
+                ... on Cat {
+                    name
+                }
+            }
+            dog {
+                name
+            }
+            cat {
+                name
+            }
+        }`;
+        const document = parse(query);
+        const rootVertex = analyzeQuery(document, schema);
+        const [allVertices, allEdges] = printDependencyGraph(rootVertex);
+        expect(allEdges).to.be.lengthOf(9);
+        const edgesString = allEdges.map(edge =>
+            edge.from.toString() + ' -> ' + edge.to.toString() + ' conditional: ' + edge.conditional);
+        expect(edgesString).to.be.deep.equal(['Query.cat: Cat -> ROOT conditional: false',
+            'Query.dog: Dog -> ROOT conditional: false',
+            'Query.pets: [CatOrDog] -> ROOT conditional: false',
+            'Query.animals: [Animal] -> ROOT conditional: false',
+            'Cat.name: String -> Query.animals: [Animal] conditional: true',
+            'Dog.name: String -> Query.animals: [Animal] conditional: true',
+            'Cat.name: String -> Query.pets: [CatOrDog] conditional: true',
+            'Dog.name: String -> Query.dog: Dog conditional: false',
+            'Cat.name: String -> Query.cat: Cat conditional: false']);
+});
 
 })
 

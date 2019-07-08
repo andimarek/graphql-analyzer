@@ -55,8 +55,9 @@ interface MergedFieldWithType {
 }
 
 export interface DependencyEdge {
-    from: FieldVertex,
-    to: FieldVertex
+    from: FieldVertex;
+    to: FieldVertex;
+    conditional: boolean;
 }
 
 export function printDependencyGraph(root: FieldVertex):
@@ -67,7 +68,12 @@ export function printDependencyGraph(root: FieldVertex):
     traverseFieldVertices(root, vertex => {
         allVertices.push(vertex);
         for (const dependOnMe of vertex.dependOnMe) {
-            edges.push({ from: dependOnMe, to: vertex });
+            let conditional = false;
+            if (vertex.fieldDefinition) {
+                const toType = getNamedType(vertex.fieldDefinition.type);
+                conditional = dependOnMe.objectType !== toType;
+            }
+            edges.push({ from: dependOnMe, to: vertex, conditional });
         }
     });
     return [allVertices, edges];
@@ -309,7 +315,7 @@ function collectField(
     if (!shouldIncludeNode(exeContext, field)) {
         return;
     }
-    if(field.name.value === TypeNameMetaFieldDef.name) {
+    if (field.name.value === TypeNameMetaFieldDef.name) {
         return;
     }
     const name = getFieldEntryKey(field);
