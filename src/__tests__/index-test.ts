@@ -11,7 +11,10 @@ describe('analyze', () => {
         dog: Dog  
         cat: Cat
         animals: [Animal]
+        pets: [CatOrDog]
     }
+    union CatOrDog = Cat | Dog
+
     interface Animal{
         name: String
     }
@@ -40,7 +43,7 @@ describe('analyze', () => {
         expect(edgesString).to.contain('Dog.name: String -> Query.dog: Dog');
         console.log(edgesString);
     });
-    it('fragments on interface', () => {
+    it('inline fragments on interface', () => {
         const query = `
         { 
             animals {
@@ -64,6 +67,26 @@ describe('analyze', () => {
         expect(edgesString).to.contain('Cat.name: String -> Query.animals: [Animal]');
 
     });
+    it('fragment on interface', () => {
+        const query = `
+        { 
+            animals {
+                ...OnCat
+            }
+        }
+        fragment OnCat on Cat{
+            name
+        }`;
+        const document = parse(query);
+        const rootVertex = analyzeQuery(document, schema);
+        const [allVertices, allEdges] = printDependencyGraph(rootVertex);
+        expect(allEdges).to.be.lengthOf(2)
+        const edgesString = allEdges.map(edge => edge.from.toString() + ' -> ' + edge.to.toString());
+        console.log(edgesString);
+        expect(edgesString).to.contain('Query.animals: [Animal] -> ROOT');
+        expect(edgesString).to.contain('Cat.name: String -> Query.animals: [Animal]');
+
+    });
 
     it('field on interface', () => {
         const query = `
@@ -81,6 +104,40 @@ describe('analyze', () => {
         expect(edgesString).to.contain('Query.animals: [Animal] -> ROOT');
         expect(edgesString).to.contain('Dog.name: String -> Query.animals: [Animal]');
         expect(edgesString).to.contain('Cat.name: String -> Query.animals: [Animal]');
+
+    });
+
+    it('validation fails', () => {
+        const query = `
+        { 
+            animals {
+                illegalField
+            }
+        }`;
+        const document = parse(query);
+        expect(() => analyzeQuery(document, schema )).to.be.throw();
+
+    });
+
+
+    it('__typename is ignored', () => {
+        const query = `
+        { 
+            animals {
+                __typename
+            }
+            pets {
+                __typename
+            }
+        }`;
+        const document = parse(query);
+        const rootVertex = analyzeQuery(document, schema);
+        const [allVertices, allEdges] = printDependencyGraph(rootVertex);
+        expect(allEdges).to.be.lengthOf(2);
+        const edgesString = allEdges.map(edge => edge.from.toString() + ' -> ' + edge.to.toString());
+        console.log(edgesString);
+        expect(edgesString).to.contain('Query.animals: [Animal] -> ROOT');
+        expect(edgesString).to.contain('Query.pets: [CatOrDog] -> ROOT');
 
     });
 

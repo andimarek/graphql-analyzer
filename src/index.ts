@@ -17,16 +17,18 @@ import {
     GraphQLInterfaceType,
     GraphQLUnionType,
     parse,
+    validate,
     GraphQLField,
     getNamedType,
     isCompositeType,
     FragmentDefinitionNode,
     DocumentNode,
-    VariableDefinitionNode
+    VariableDefinitionNode,
+    GraphQLError,
+    TypeNameMetaFieldDef
 } from 'graphql';
 import { getArgumentValues, getVariableValues } from 'graphql/execution/values';
 import * as util from 'util';
-import { restElement } from '@babel/types';
 import { buildExecutionContext } from 'graphql/execution/execute';
 
 interface ExecutionContext {
@@ -93,7 +95,14 @@ export function analyzeQuery(
     document: DocumentNode,
     schema: GraphQLSchema,
     rawVariableValues?: { [key: string]: any },
+    validateQuery = true,
 ): FieldVertex {
+    if (validateQuery) {
+        const errors = validate(schema, document);
+        if (errors.length > 0) {
+            throw errors[0];
+        }
+    }
     const operationDefinition = getOperationDefinition(document);
     const variableDefinitions = (operationDefinition.variableDefinitions as Array<VariableDefinitionNode>)
         || [];
@@ -146,7 +155,7 @@ export function analyzeQuery(
             dependsOn: [context.parentContext!.fieldVertex!],
             dependOnMe: [],
             toString() {
-                return this.objectType.name + "." + this.fields[0].name.value + ": " + 
+                return this.objectType.name + "." + this.fields[0].name.value + ": " +
                     this.fieldDefinition.type;
             }
         };
@@ -298,6 +307,9 @@ function collectField(
     parentType: GraphQLOutputType
 ) {
     if (!shouldIncludeNode(exeContext, field)) {
+        return;
+    }
+    if(field.name.value === TypeNameMetaFieldDef.name) {
         return;
     }
     const name = getFieldEntryKey(field);
