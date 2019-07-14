@@ -2,6 +2,9 @@
 
 Static analysis of GraphQL queries (analysis without actually executing the query).
 
+Please see this blog post for background and details: [Static analysis of GraphQL queries
+](https://www.graphql.de/blog/static-query-analysis/)
+
 # Usage
 
 Add to your project:
