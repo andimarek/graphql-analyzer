@@ -36,7 +36,7 @@ export function analyzeQuery(
     : FieldVertex;
 ```
 
-`printDependencyGraph` returns all vertices and all edges 
+`printDependencyGraph` returns all vertices and all edges for a dependency graph:
 
 ```typescript
 export interface DependencyEdge {
@@ -49,7 +49,7 @@ export function printDependencyGraph(
     : [Array<FieldVertex>, Array<DependencyEdge>];
 ```
 
-`traverseFieldVertices` lets you traverse the graph returned by `analyzeQuery`
+`traverseFieldVertices` lets you traverse the graph returned by `analyzeQuery`:
 
 ```typescript
 export function traverseFieldVertices(
